@@ -1,0 +1,45 @@
+﻿# Entornos Virtuales y Python
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.class
+*.egg-info/
+.pytest_cache/
+
+# Variables de Entorno y Secretos (CRÍTICO: nunca subir API keys)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Node.js y Frontend (React / Vite)
+node_modules/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Bases de datos locales y volúmenes de Docker
+pgdata/
+postgres_data/
+redis_data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Archivos temporales y reportes generados
+temp/
+uploads/
+*.pdf
+!ragas_executive_report.pdf
+
+# Editores y Sistema Operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
