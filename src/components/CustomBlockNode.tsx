@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { FileText, Cpu, Database, MessageSquareCode, Sparkles, Plug, RefreshCw, X } from 'lucide-react';
+import { FileText, Cpu, Database, MessageSquareCode, Sparkles, Plug, RefreshCw, X, AlertCircle } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 
 export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
   const { updateNodeData, removeNode } = useGameStore();
   const [discovering, setDiscovering] = useState(false);
+
+  const diagnostic = data.diagnostic;
 
   const handleProviderChange = async (newProvider: string) => {
     updateNodeData(id, { provider: newProvider });
@@ -39,9 +41,18 @@ export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
     }
   };
 
+  const borderClass = diagnostic
+    ? diagnostic.severity === 'error'
+      ? 'border-2 border-rose-500 shadow-rose-950/60'
+      : 'border-2 border-amber-500/80 shadow-amber-950/40'
+    : 'border border-slate-700';
+
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-xl w-64 font-mono text-xs text-slate-100 overflow-hidden">
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500" />
+    <div className={`bg-slate-900 ${borderClass} rounded-xl shadow-xl w-64 font-mono text-xs text-slate-100 overflow-hidden transition-all`}>
+      {type !== 'docLoader' && type !== 'embeddingGen' && type !== 'mcpClient' && (
+        <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500" />
+      )}
+
       <div className="bg-slate-950 px-3 py-2 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center space-x-2">
           {type === 'docLoader' && <FileText className="w-4 h-4 text-emerald-400" />}
@@ -52,14 +63,21 @@ export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
           {type === 'llmNode' && <Sparkles className="w-4 h-4 text-indigo-400" />}
           <span className="font-bold text-[11px] tracking-wide">{data.label}</span>
         </div>
-        <button
-          onClick={() => removeNode(id)}
-          className="text-slate-600 hover:text-rose-400 transition"
-          title="Eliminar nodo"
-        >
+        <button onClick={() => removeNode(id)} className="text-slate-600 hover:text-rose-400 transition" title="Eliminar nodo">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {diagnostic && (
+        <div className={`px-2.5 py-1 text-[9px] flex items-center space-x-1 border-b ${
+          diagnostic.severity === 'error'
+            ? 'bg-rose-950/80 text-rose-300 border-rose-900'
+            : 'bg-amber-950/70 text-amber-300 border-amber-900'
+        }`}>
+          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+          <span className="truncate">{diagnostic.message}</span>
+        </div>
+      )}
 
       <div className="p-3 space-y-2">
         {type === 'docLoader' && (
@@ -80,10 +98,7 @@ export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
                   formData.append('file', file);
                   formData.append('tenant_id', 'omnicorp');
                   formData.append('category', 'manuales');
-                  const res = await fetch('http://localhost:8000/api/documents/index-pdf', {
-                    method: 'POST',
-                    body: formData,
-                  });
+                  const res = await fetch('http://localhost:8000/api/documents/index-pdf', { method: 'POST', body: formData });
                   const result = await res.json();
                   if (res.ok) {
                     updateNodeData(id, { source: file.name });
@@ -141,7 +156,7 @@ export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
         {type === 'mcpClient' && (
           <div className="space-y-2">
             <div>
-              <label className="text-[9px] text-slate-400 uppercase font-bold block mb-0.5">Servidor MCP (Endpoint):</label>
+              <label className="text-[9px] text-slate-400 uppercase font-bold block mb-0.5">Servidor MCP:</label>
               <select
                 value={data.serverUrl || 'builtin://omnicorp-erp'}
                 onChange={(e) => updateNodeData(id, { serverUrl: e.target.value, tools: [], selectedTool: '' })}
@@ -152,7 +167,6 @@ export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
                 <option value="http://localhost:3001/mcp">http://localhost:3001/mcp (Custom HTTP)</option>
               </select>
             </div>
-
             <button
               type="button"
               onClick={discoverMcpTools}
@@ -162,10 +176,9 @@ export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
               <RefreshCw className={`w-3 h-3 ${discovering ? 'animate-spin' : ''}`} />
               <span>{discovering ? 'Conectando...' : 'Descubrir Tools (tools/list)'}</span>
             </button>
-
             {data.tools && data.tools.length > 0 && (
               <div>
-                <label className="text-[9px] text-slate-400 block mb-0.5">Tool Activa ({data.tools.length} disp.):</label>
+                <label className="text-[9px] text-slate-400 block mb-0.5">Tool Activa:</label>
                 <select
                   value={data.selectedTool || ''}
                   onChange={(e) => updateNodeData(id, { selectedTool: e.target.value })}
@@ -216,7 +229,9 @@ export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
         )}
       </div>
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-emerald-500" />
+      {type !== 'llmNode' && (
+        <Handle type="source" position={Position.Right} className="w-3 h-3 bg-emerald-500" />
+      )}
     </div>
   );
 };

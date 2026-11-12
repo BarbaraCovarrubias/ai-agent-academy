@@ -2,9 +2,9 @@ import os
 import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Set
 from pydantic import BaseModel
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from server.llm_client import call_llm, CURRENT_CONFIG
 from server.embedding_client import generate_embedding
 from server.mcp_bridge import invoke_mcp_tool
@@ -27,15 +27,35 @@ class ChatRunRequest(BaseModel):
     nodes: List[Dict[str, Any]]
     edges: List[Dict[str, Any]]
 
+def get_connected_ancestors(target_ids: List[str], edges: List[Dict[str, Any]]) -> Set[str]:
+    """Recorre el grafo hacia atrás desde los nodos LLM para detectar qué bloques están realmente cableados."""
+    visited = set(target_ids)
+    queue = list(target_ids)
+    while queue:
+        curr = queue.pop(0)
+        for e in edges:
+            if e.get("target") == curr and e.get("source") not in visited:
+                visited.add(e["source"])
+                queue.append(e["source"])
+    return visited
+
 @chat_router.post("/run")
 async def execute_live_pipeline(req: ChatRunRequest):
     t0 = time.perf_counter()
     query = req.query
-    type_map = {n["type"]: n for n in req.nodes}
-    mcp_nodes = [n for n in req.nodes if n["type"] == "mcpClient"]
+
+    llm_nodes = [n for n in req.nodes if n["type"] == "llmNode"]
+    if not llm_nodes:
+        raise HTTPException(status_code=400, detail="El grafo no tiene ningún nodo terminal LLM Engine.")
+
+    # Solo ejecutar nodos que estén conectados topológicamente al LLM Engine
+    active_ids = get_connected_ancestors([n["id"] for n in llm_nodes], req.edges)
+    active_nodes = [n for n in req.nodes if n["id"] in active_ids]
+    type_map = {n["type"]: n for n in active_nodes}
+    mcp_nodes = [n for n in active_nodes if n["type"] == "mcpClient"]
 
     provider = CURRENT_CONFIG.get("provider", "mock")
-    llm_node = type_map.get("llmNode", {})
+    llm_node = llm_nodes[0]
     prompt_node = type_map.get("promptTemplate", {})
     vector_node = type_map.get("pgVectorStore", {})
     emb_node = type_map.get("embeddingGen", {})
@@ -52,7 +72,7 @@ async def execute_live_pipeline(req: ChatRunRequest):
     retrieved_chunks: List[str] = []
     mcp_traces: List[str] = []
 
-    # 1. Ejecutar herramientas de nodos MCP Client conectados al grafo
+    # 1. Ejecutar SOLO herramientas de nodos MCP Client conectados al flujo
     for m_node in mcp_nodes:
         m_data = m_node.get("data", {})
         server_url = m_data.get("serverUrl", "builtin://omnicorp-erp")
@@ -62,7 +82,7 @@ async def execute_live_pipeline(req: ChatRunRequest):
             mcp_traces.append(tool_out)
             retrieved_chunks.append(tool_out)
 
-    # 2. Recuperación semántica en pgvector si el nodo está en el grafo
+    # 2. Ejecutar búsqueda en pgvector SOLO si el nodo está conectado
     if "pgVectorStore" in type_map:
         top_k = int(vector_node.get("data", {}).get("topK", 3))
         try:
@@ -89,7 +109,6 @@ async def execute_live_pipeline(req: ChatRunRequest):
         except Exception as e:
             print(f"[!] Error pgvector: {e}")
 
-    # 3. Ensamblado de contexto e inferencia LLM
     context_str = "\n".join(retrieved_chunks) if retrieved_chunks else "Sin evidencia documental."
     assembled_prompt = template_raw.replace("{context}", context_str).replace("{query}", query)
 
@@ -116,7 +135,6 @@ async def execute_live_pipeline(req: ChatRunRequest):
 
     latency = int((time.perf_counter() - t0) * 1000)
 
-    # 4. Evaluación RAGAS
     f_score, _, f_exp = await evaluate_faithfulness(generated_response, retrieved_chunks, provider)
     r_score, r_exp = await evaluate_answer_relevance(query, generated_response, provider)
     cp_score, cp_exp = evaluate_context_precision(query, retrieved_chunks)
