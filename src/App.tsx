@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import ReactFlow, { Background, Controls, MiniMap } from 'reactflow';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import ReactFlow, { Background, Controls, MiniMap, ReactFlowProvider, ReactFlowInstance } from 'reactflow';
 import { Database, Scale, TrendingUp, FlaskConical, Sliders, Cpu } from 'lucide-react';
 import { useGameStore } from './store/gameStore';
 import { CustomBlockNode } from './components/CustomBlockNode';
+import { NodePaletteSidebar } from './components/NodePaletteSidebar';
 import { LiveChatDrawer } from './components/LiveChatDrawer';
 import { ChunkInspectorModal } from './components/ChunkInspectorModal';
 import { IndexBenchmarkModal } from './components/IndexBenchmarkModal';
@@ -13,8 +14,11 @@ import { MaintenanceLiveBanner } from './components/MaintenanceLiveBanner';
 import { SystemMetricsWidget } from './components/SystemMetricsWidget';
 import { BufferSaturationAlert } from './components/BufferSaturationAlert';
 
-export default function App() {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect } = useGameStore();
+function StudioCanvas() {
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode } = useGameStore();
+  const reactFlowWrapper = useRef<HTMLDivElement | null>(null);
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+
   const [chunkInspectorOpen, setChunkInspectorOpen] = useState(false);
   const [inspectorDocId, setInspectorDocId] = useState('');
   const [isBenchmarkOpen, setIsBenchmarkOpen] = useState(false);
@@ -26,6 +30,7 @@ export default function App() {
     docLoader: CustomBlockNode,
     embeddingGen: CustomBlockNode,
     pgVectorStore: CustomBlockNode,
+    mcpClient: CustomBlockNode,
     promptTemplate: CustomBlockNode,
     llmNode: CustomBlockNode,
   }), []);
@@ -39,6 +44,33 @@ export default function App() {
     return () => window.removeEventListener('open-chunk-inspector', handler);
   }, []);
 
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      const raw = event.dataTransfer.getData('application/reactflow');
+      if (!raw || !rfInstance) return;
+
+      const parsed = JSON.parse(raw);
+      const position = rfInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      addNode({
+        id: `${parsed.type}-${Date.now()}`,
+        type: parsed.type,
+        position,
+        data: parsed.data,
+      });
+    },
+    [rfInstance, addNode]
+  );
+
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden font-mono">
       <BufferSaturationAlert />
@@ -49,7 +81,7 @@ export default function App() {
         <div className="flex items-center space-x-2.5">
           <Cpu className="w-5 h-5 text-indigo-400" />
           <span className="font-extrabold text-sm tracking-wide">AI AGENT ACADEMY</span>
-          <span className="text-[10px] bg-indigo-950 border border-indigo-800 text-indigo-300 px-2 py-0.5 rounded">Enterprise RAG Studio</span>
+          <span className="text-[10px] bg-indigo-950 border border-indigo-800 text-indigo-300 px-2 py-0.5 rounded">Enterprise RAG & MCP Studio</span>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -72,13 +104,27 @@ export default function App() {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 h-full relative">
-          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} fitView>
+        <NodePaletteSidebar />
+
+        <div className="flex-1 h-full relative" ref={reactFlowWrapper}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onInit={setRfInstance}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            fitView
+          >
             <Background color="#1e293b" gap={20} />
             <Controls className="bg-slate-900 border-slate-700 fill-slate-200" />
             <MiniMap className="bg-slate-900 border border-slate-800" nodeColor="#6366f1" />
           </ReactFlow>
         </div>
+
         <LiveChatDrawer />
       </div>
 
@@ -88,5 +134,13 @@ export default function App() {
       {isBatchEvalOpen && <BatchEvaluationModal onClose={() => setIsBatchEvalOpen(false)} />}
       {isTunerOpen && <MemoryTunerModal onClose={() => setIsTunerOpen(false)} />}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ReactFlowProvider>
+      <StudioCanvas />
+    </ReactFlowProvider>
   );
 }

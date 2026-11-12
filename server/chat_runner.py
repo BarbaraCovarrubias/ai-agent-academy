@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter
 from server.llm_client import call_llm, CURRENT_CONFIG
 from server.embedding_client import generate_embedding
+from server.mcp_bridge import invoke_mcp_tool
 from server.ragas_evaluator import (
     evaluate_faithfulness,
     evaluate_answer_relevance,
@@ -31,6 +32,7 @@ async def execute_live_pipeline(req: ChatRunRequest):
     t0 = time.perf_counter()
     query = req.query
     type_map = {n["type"]: n for n in req.nodes}
+    mcp_nodes = [n for n in req.nodes if n["type"] == "mcpClient"]
 
     provider = CURRENT_CONFIG.get("provider", "mock")
     llm_node = type_map.get("llmNode", {})
@@ -48,6 +50,19 @@ async def execute_live_pipeline(req: ChatRunRequest):
     template_raw = prompt_node.get("data", {}).get("template", "Contexto:\n{context}\n\nPregunta: {query}")
 
     retrieved_chunks: List[str] = []
+    mcp_traces: List[str] = []
+
+    # 1. Ejecutar herramientas de nodos MCP Client conectados al grafo
+    for m_node in mcp_nodes:
+        m_data = m_node.get("data", {})
+        server_url = m_data.get("serverUrl", "builtin://omnicorp-erp")
+        selected_tool = m_data.get("selectedTool", "")
+        if selected_tool:
+            tool_out = await invoke_mcp_tool(server_url, selected_tool, {"query": query})
+            mcp_traces.append(tool_out)
+            retrieved_chunks.append(tool_out)
+
+    # 2. Recuperación semántica en pgvector si el nodo está en el grafo
     if "pgVectorStore" in type_map:
         top_k = int(vector_node.get("data", {}).get("topK", 3))
         try:
@@ -68,21 +83,27 @@ async def execute_live_pipeline(req: ChatRunRequest):
                 )
                 rows = cur.fetchall()
             conn.close()
-            retrieved_chunks = [r["content"] for r in rows if float(r["dist"]) <= 0.35]
+            for r in rows:
+                if float(r["dist"]) <= 0.35:
+                    retrieved_chunks.append(r["content"])
         except Exception as e:
             print(f"[!] Error pgvector: {e}")
 
+    # 3. Ensamblado de contexto e inferencia LLM
     context_str = "\n".join(retrieved_chunks) if retrieved_chunks else "Sin evidencia documental."
     assembled_prompt = template_raw.replace("{context}", context_str).replace("{query}", query)
 
     system_prompt = (
-        "Eres un asistente corporativo estricto de OmniCorp. "
+        "Eres un agente corporativo estricto de OmniCorp. "
+        "Utiliza los resultados de herramientas MCP y el contexto documental. "
         "Si la respuesta no figura en el contexto, indica: 'No dispongo de información oficial sobre esa política.'"
     )
 
     if provider == "mock":
-        if retrieved_chunks:
-            generated_response = f"Según la documentación oficial de OmniCorp: {retrieved_chunks[0]}"
+        if mcp_traces and len(retrieved_chunks) == len(mcp_traces):
+            generated_response = f"Resultado obtenido vía herramienta MCP: {mcp_traces[0]}"
+        elif retrieved_chunks:
+            generated_response = f"Según la documentación y herramientas conectadas: {retrieved_chunks[0]}"
         else:
             generated_response = "No dispongo de información oficial sobre esa política en la base de conocimiento."
     else:
@@ -95,6 +116,7 @@ async def execute_live_pipeline(req: ChatRunRequest):
 
     latency = int((time.perf_counter() - t0) * 1000)
 
+    # 4. Evaluación RAGAS
     f_score, _, f_exp = await evaluate_faithfulness(generated_response, retrieved_chunks, provider)
     r_score, r_exp = await evaluate_answer_relevance(query, generated_response, provider)
     cp_score, cp_exp = evaluate_context_precision(query, retrieved_chunks)
@@ -109,6 +131,7 @@ async def execute_live_pipeline(req: ChatRunRequest):
     return {
         "response": generated_response,
         "context_chunks": retrieved_chunks,
+        "mcp_traces": mcp_traces,
         "latency_ms": latency,
         "applied_temperature": temp,
         "provider": provider,

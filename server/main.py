@@ -20,6 +20,7 @@ from server.ragas_evaluator import ragas_router
 from server.batch_evaluator import batch_router
 from server.report_generator import report_router
 from server.chat_runner import chat_router
+from server.mcp_bridge import mcp_router
 
 async def telemetry_broadcast_loop():
     while True:
@@ -80,3 +81,4 @@ app.include_router(ragas_router)
 app.include_router(batch_router)
 app.include_router(report_router)
 app.include_router(chat_router)
+app.include_router(mcp_router)

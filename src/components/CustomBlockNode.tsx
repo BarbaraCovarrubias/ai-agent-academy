@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { FileText, Cpu, Database, MessageSquareCode, Sparkles } from 'lucide-react';
+import { FileText, Cpu, Database, MessageSquareCode, Sparkles, Plug, RefreshCw, X } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 
 export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
-  const updateNodeData = useGameStore((s) => s.updateNodeData);
+  const { updateNodeData, removeNode } = useGameStore();
+  const [discovering, setDiscovering] = useState(false);
 
   const handleProviderChange = async (newProvider: string) => {
     updateNodeData(id, { provider: newProvider });
@@ -15,16 +16,49 @@ export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
     }).catch(() => {});
   };
 
+  const discoverMcpTools = async () => {
+    setDiscovering(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/mcp/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ server_url: data.serverUrl || 'builtin://omnicorp-erp' }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        const tools = result.tools || [];
+        updateNodeData(id, {
+          tools,
+          selectedTool: tools.length > 0 ? tools[0].name : '',
+        });
+      } else {
+        alert(`Error MCP: ${result.detail}`);
+      }
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
   return (
     <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-xl w-64 font-mono text-xs text-slate-100 overflow-hidden">
       <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500" />
-      <div className="bg-slate-950 px-3 py-2 border-b border-slate-800 flex items-center space-x-2">
-        {type === 'docLoader' && <FileText className="w-4 h-4 text-emerald-400" />}
-        {type === 'embeddingGen' && <Cpu className="w-4 h-4 text-cyan-400" />}
-        {type === 'pgVectorStore' && <Database className="w-4 h-4 text-purple-400" />}
-        {type === 'promptTemplate' && <MessageSquareCode className="w-4 h-4 text-amber-400" />}
-        {type === 'llmNode' && <Sparkles className="w-4 h-4 text-indigo-400" />}
-        <span className="font-bold text-[11px] tracking-wide">{data.label}</span>
+      <div className="bg-slate-950 px-3 py-2 border-b border-slate-800 flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          {type === 'docLoader' && <FileText className="w-4 h-4 text-emerald-400" />}
+          {type === 'embeddingGen' && <Cpu className="w-4 h-4 text-cyan-400" />}
+          {type === 'pgVectorStore' && <Database className="w-4 h-4 text-purple-400" />}
+          {type === 'mcpClient' && <Plug className="w-4 h-4 text-rose-400" />}
+          {type === 'promptTemplate' && <MessageSquareCode className="w-4 h-4 text-amber-400" />}
+          {type === 'llmNode' && <Sparkles className="w-4 h-4 text-indigo-400" />}
+          <span className="font-bold text-[11px] tracking-wide">{data.label}</span>
+        </div>
+        <button
+          onClick={() => removeNode(id)}
+          className="text-slate-600 hover:text-rose-400 transition"
+          title="Eliminar nodo"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       <div className="p-3 space-y-2">
@@ -101,6 +135,48 @@ export const CustomBlockNode: React.FC<NodeProps> = ({ id, type, data }) => {
             >
               Inspeccionar Chunks
             </button>
+          </div>
+        )}
+
+        {type === 'mcpClient' && (
+          <div className="space-y-2">
+            <div>
+              <label className="text-[9px] text-slate-400 uppercase font-bold block mb-0.5">Servidor MCP (Endpoint):</label>
+              <select
+                value={data.serverUrl || 'builtin://omnicorp-erp'}
+                onChange={(e) => updateNodeData(id, { serverUrl: e.target.value, tools: [], selectedTool: '' })}
+                className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] text-rose-300"
+              >
+                <option value="builtin://omnicorp-erp">builtin://omnicorp-erp (RRHH / IT)</option>
+                <option value="builtin://devops-telemetry">builtin://devops-telemetry (EKS/Kafka)</option>
+                <option value="http://localhost:3001/mcp">http://localhost:3001/mcp (Custom HTTP)</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={discoverMcpTools}
+              disabled={discovering}
+              className="w-full flex items-center justify-center space-x-1 bg-rose-950/70 hover:bg-rose-900 border border-rose-800 rounded px-2 py-1 text-[10px] text-rose-200 font-bold transition"
+            >
+              <RefreshCw className={`w-3 h-3 ${discovering ? 'animate-spin' : ''}`} />
+              <span>{discovering ? 'Conectando...' : 'Descubrir Tools (tools/list)'}</span>
+            </button>
+
+            {data.tools && data.tools.length > 0 && (
+              <div>
+                <label className="text-[9px] text-slate-400 block mb-0.5">Tool Activa ({data.tools.length} disp.):</label>
+                <select
+                  value={data.selectedTool || ''}
+                  onChange={(e) => updateNodeData(id, { selectedTool: e.target.value })}
+                  className="w-full bg-slate-950 border border-emerald-800/70 rounded px-2 py-1 text-[10px] text-emerald-300 font-bold"
+                >
+                  {data.tools.map((t: any) => (
+                    <option key={t.name} value={t.name}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
 
