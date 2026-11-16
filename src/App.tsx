@@ -1,3 +1,4 @@
+import EnterpriseStudioPanel from "./components/EnterpriseStudioPanel";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import ReactFlow, { Background, Controls, MiniMap, ReactFlowProvider, ReactFlowInstance, Connection } from 'reactflow';
 import { Database, Scale, TrendingUp, FlaskConical, Sliders, Cpu } from 'lucide-react';
@@ -161,6 +162,15 @@ function StudioCanvas() {
               className="border border-slate-800 rounded-lg overflow-hidden"
             />
           </ReactFlow>
+        <div style={{ position: "absolute", bottom: 16, right: 16, zIndex: 20, width: 470, maxWidth: "92vw" }}>
+          <EnterpriseStudioPanel
+            nodes={nodes}
+            edges={edges}
+            sandboxMode={sandboxMode}
+            setSandboxMode={setSandboxMode}
+            onLoadWorkflow={(n: any, e: any) => { setNodes(n); setEdges(e); }}
+          />
+        </div>
         </div>
 
         <LiveChatDrawer />
