@@ -1,102 +1,69 @@
 import httpx
-from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from typing import Dict, Any
 
-mcp_router = APIRouter(prefix="/api/mcp", tags=["MCP Client Bridge"])
-
-# Herramientas integradas para pruebas instantáneas sin servidor externo
-BUILTIN_MCP_SERVERS: Dict[str, List[Dict[str, Any]]] = {
+BUILTIN_SERVERS = {
     "builtin://omnicorp-erp": [
-        {
-            "name": "get_employee_balance",
-            "description": "Consulta saldo disponible de reintegros y días de vacaciones de un empleado.",
-            "inputSchema": {"type": "object", "properties": {"employee_id": {"type": "string"}}}
-        },
-        {
-            "name": "check_ticket_status",
-            "description": "Verifica el estado de un ticket de soporte IT o infraestructura.",
-            "inputSchema": {"type": "object", "properties": {"ticket_id": {"type": "string"}}}
-        }
+        {"name": "get_employee_benefits", "description": "Consulta saldo de vacaciones, reintegros y beneficios vigentes."},
+        {"name": "check_expense_policy", "description": "Valida topes de viaticos y aprobaciones por categoria."}
     ],
     "builtin://devops-telemetry": [
-        {
-            "name": "get_cluster_health",
-            "description": "Obtiene estado de nodos EKS, latencia de API Gateway y colas Kafka.",
-            "inputSchema": {"type": "object", "properties": {}}
-        }
+        {"name": "get_eks_pod_health", "description": "Obtiene estado de pods, restarts y latencia p99 en Kubernetes."},
+        {"name": "inspect_kafka_lag", "description": "Mide consumer lag por topico en clusters de eventos."}
     ]
 }
 
-class MCPDiscoverRequest(BaseModel):
-    server_url: str
+async def _mcp_http_handshake(client: httpx.AsyncClient, server_url: str) -> Dict[str, str]:
+    headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+    init_payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {"tools": {}},
+            "clientInfo": {"name": "ai-agent-academy-client", "version": "1.1.0"}
+        }
+    }
+    res = await client.post(server_url, json=init_payload, headers=headers)
+    res.raise_for_status()
+    session_id = res.headers.get("Mcp-Session-Id")
+    if session_id:
+        headers["Mcp-Session-Id"] = session_id
 
-class MCPExecuteRequest(BaseModel):
-    server_url: str
-    tool_name: str
-    arguments: Dict[str, Any] = {}
+    # Notificacion obligatoria segun especificacion MCP tras recibir InitializeResult
+    notif_payload = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+    await client.post(server_url, json=notif_payload, headers=headers)
+    return headers
 
-def _execute_builtin_tool(server_url: str, tool_name: str, arguments: Dict[str, Any]) -> str:
-    if tool_name == "get_employee_balance":
-        emp = arguments.get("employee_id", "EMP-2026")
-        return f"[MCP ERP] Empleado {emp}: Saldo conectividad disponible $45.000 ARS | Vacaciones acumuladas: 14 días hábiles."
-    if tool_name == "check_ticket_status":
-        tk = arguments.get("ticket_id", "INC-904")
-        return f"[MCP IT] Ticket {tk}: RESUELTO. Túnel Zero Trust habilitado en producción."
-    if tool_name == "get_cluster_health":
-        return "[MCP DevOps] Cluster EKS prod-sa-east-1: HEALTHY (99.98% uptime, Kafka lag: 0 msgs)."
-    return f"[MCP {server_url}] Tool '{tool_name}' ejecutada con argumentos {arguments}."
+async def discover_mcp_tools(server_url: str) -> Dict[str, Any]:
+    if server_url in BUILTIN_SERVERS:
+        return {"status": "connected", "protocol": "MCP JSON-RPC 2.0 (Builtin)", "tools": BUILTIN_SERVERS[server_url]}
 
-async def discover_mcp_tools(server_url: str) -> List[Dict[str, Any]]:
-    if server_url in BUILTIN_MCP_SERVERS:
-        return BUILTIN_MCP_SERVERS[server_url]
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        headers = await _mcp_http_handshake(client, server_url)
+        list_payload = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+        res = await client.post(server_url, json=list_payload, headers=headers)
+        res.raise_for_status()
+        data = res.json()
+        tools = data.get("result", {}).get("tools", [])
+        return {"status": "connected", "protocol": "MCP JSON-RPC 2.0 (Initialized)", "tools": tools}
 
-    # Protocolo JSON-RPC 2.0 estándar de MCP (tools/list) sobre HTTP
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            res = await client.post(
-                server_url,
-                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
-                headers={"Content-Type": "application/json"},
-            )
-            res.raise_for_status()
-            data = res.json()
-            return data.get("result", {}).get("tools", [])
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"No se pudo conectar al servidor MCP ({server_url}): {str(e)}")
+async def invoke_mcp_tool(server_url: str, tool_name: str, query: str) -> Dict[str, Any]:
+    if server_url in BUILTIN_SERVERS:
+        if tool_name == "get_employee_benefits":
+            return {"tool": tool_name, "result": "Saldo disponible: 14 dias de vacaciones + $85.000 ARS en reintegros de conectividad."}
+        if tool_name == "get_eks_pod_health":
+            return {"tool": tool_name, "result": "Cluster prod-eks: 12/12 pods Running | Latencia p99: 42ms | 0 OOMKilled."}
+        return {"tool": tool_name, "result": f"Ejecucion simulada exitosa para {tool_name} con query: {query}"}
 
-async def invoke_mcp_tool(server_url: str, tool_name: str, arguments: Dict[str, Any]) -> str:
-    if server_url in BUILTIN_MCP_SERVERS:
-        return _execute_builtin_tool(server_url, tool_name, arguments)
-
-    # Protocolo JSON-RPC 2.0 estándar de MCP (tools/call)
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            res = await client.post(
-                server_url,
-                json={
-                    "jsonrpc": "2.0",
-                    "id": 2,
-                    "method": "tools/call",
-                    "params": {"name": tool_name, "arguments": arguments},
-                },
-                headers={"Content-Type": "application/json"},
-            )
-            res.raise_for_status()
-            data = res.json()
-            content_list = data.get("result", {}).get("content", [])
-            if content_list and isinstance(content_list, list):
-                return "\n".join(c.get("text", str(c)) for c in content_list)
-            return str(data.get("result", "Sin salida"))
-    except Exception as e:
-        return f"[Error MCP Tool {tool_name}]: {str(e)}"
-
-@mcp_router.post("/discover")
-async def api_discover_tools(req: MCPDiscoverRequest):
-    tools = await discover_mcp_tools(req.server_url)
-    return {"server_url": req.server_url, "tools": tools, "count": len(tools)}
-
-@mcp_router.post("/call")
-async def api_call_tool(req: MCPExecuteRequest):
-    output = await invoke_mcp_tool(req.server_url, req.tool_name, req.arguments)
-    return {"tool_name": req.tool_name, "output": output}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        headers = await _mcp_http_handshake(client, server_url)
+        call_payload = {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": tool_name, "arguments": {"query": query}}
+        }
+        res = await client.post(server_url, json=call_payload, headers=headers)
+        res.raise_for_status()
+        return {"tool": tool_name, "result": res.json().get("result", {})}

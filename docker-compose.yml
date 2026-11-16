@@ -1,12 +1,11 @@
 services:
-  postgres-pgvector:
+  pgvector_db:
     image: pgvector/pgvector:pg16
     container_name: agent_academy_pgvector
-    restart: unless-stopped
     environment:
-      POSTGRES_USER: academy_admin
-      POSTGRES_PASSWORD: academy_secure_pass_2026
-      POSTGRES_DB: agent_academy
+      POSTGRES_USER: ${POSTGRES_USER:-academy_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-academy_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-agent_academy}
     ports:
       - "5432:5432"
     volumes:
