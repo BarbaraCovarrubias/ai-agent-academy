@@ -96,3 +96,16 @@
                                                                                |
                                                                                v
 [ Auditoria RAGAS ] <-------------(Score Compuesto & Veredicto)------- [ LLM Engine ]
+
+
+---
+
+## 🚀 Novedades Enterprise v2 (`feat/enterprise-v2`)
+
+Esta rama evoluciona el estudio visual hacia una arquitectura lista para entornos corporativos auditables:
+
+1. **Búsqueda Híbrida (HNSW + Full-Text BM25) con RRF y Reranker (`server/hybrid_reranker.py`):** Combina similitud vectorial en `pgvector` con búsqueda léxica en PostgreSQL (`tsvector` / `ts_rank_cd`) mediante *Reciprocal Rank Fusion* (RRF) y reordenamiento por relevancia semántica.
+2. **Router Multi-Agente y Auto-Reflexión (`server/multi_agent_router.py`):** Clasifica dinámicamente la intención de cada consulta entre `rag_only`, `mcp_only` o `hybrid_parallel`, e incluye reescritura de consultas (*Self-Correction Loop*).
+3. **Gobernanza MCP, RBAC y *Human-in-the-Loop* (`server/mcp_governance.py`):** Control de permisos por rol (`architect`, `qa_auditor`, `viewer`), bloqueo preventivo con aprobación humana explícita para herramientas críticas (`restart_eks_pod`, `approve_expense`, etc.) y registro de auditoría en PostgreSQL (`mcp_audit_logs`).
+4. **Persistencia de Topologías y Exportador a LangGraph (`server/workflow_exporter.py`):** Versionado de arquitecturas en base de datos (`saved_workflows`) y transpilación directa del grafo visual a código Python ejecutable con `StateGraph` de LangGraph.
+5. **Enterprise Studio v2 & UI Responsiva (`src/components/EnterpriseStudioPanel.jsx`):** Panel integrado con modo *Sandbox* (sin backend), paneles laterales redimensionables con tiradores arrastrables y suite de pruebas automatizadas con `pytest` (`tests/test_v2_pillars.py`).

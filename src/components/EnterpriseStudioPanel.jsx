@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function EnterpriseStudioPanel({ nodes = [], edges = [], onLoadWorkflow, sandboxMode, setSandboxMode }) {
+  const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("governance");
   const [userRole, setUserRole] = useState("architect");
   const [testTool, setTestTool] = useState("restart_eks_pod");
@@ -92,10 +93,15 @@ export default function EnterpriseStudioPanel({ nodes = [], edges = [], onLoadWo
     setRouterResult(await res.json());
   };
 
+  if (!isOpen) return (
+    <button onClick={() => setIsOpen(true)} style={{ background: "#0f172a", color: "#38bdf8", border: "1px solid #38bdf8", borderRadius: 8, padding: "6px 12px", fontSize: 12, whiteSpace: "nowrap", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.6)" }}>
+      Studio v2 (HITL · LangGraph)
+    </button>
+  );
   return (
-    <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 14, color: "#e2e8f0", fontSize: 13 }}>
+    <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 12, padding: 16, color: "#e2e8f0", fontSize: 13, width: 500, maxWidth: "100%", boxSizing: "border-box", boxShadow: "0 12px 32px rgba(0,0,0,0.65)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <strong style={{ color: "#38bdf8" }}>Enterprise Studio v2 (Multi-Agente · HITL · LangGraph)</strong>
+        <strong style={{ color: "#38bdf8" }}>Enterprise Studio v2</strong><button onClick={() => setIsOpen(false)} style={{ background: "transparent", color: "#94a3b8", border: "none", cursor: "pointer", fontWeight: 700 }}>✕</button>
         <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12 }}>
           <input type="checkbox" checked={sandboxMode} onChange={(e) => setSandboxMode(e.target.checked)} />
           Modo Sandbox (Sin Backend)
@@ -128,19 +134,21 @@ export default function EnterpriseStudioPanel({ nodes = [], edges = [], onLoadWo
 
       {activeTab === "governance" && (
         <div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            <select value={userRole} onChange={e => setUserRole(e.target.value)} style={{ background: "#1e293b", color: "#fff", padding: 6, borderRadius: 6 }}>
-              <option value="architect">Rol: Architect (Full)</option>
-              <option value="qa_auditor">Rol: QA Auditor</option>
-              <option value="viewer">Rol: Viewer (Read-Only)</option>
-            </select>
-            <select value={testTool} onChange={e => setTestTool(e.target.value)} style={{ background: "#1e293b", color: "#fff", padding: 6, borderRadius: 6 }}>
-              <option value="get_employee_benefits">Tool: get_employee_benefits (Segura)</option>
-              <option value="restart_eks_pod">Tool: restart_eks_pod (Critica HITL)</option>
-              <option value="approve_expense">Tool: approve_expense (Critica HITL)</option>
-            </select>
-            <button onClick={() => checkPolicy(false)} style={{ background: "#0ea5e9", color: "#000", fontWeight: 700, border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer" }}>
-              Validar Politica
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <select value={userRole} onChange={e => setUserRole(e.target.value)} style={{ flex: 1, minWidth: 0, background: "#1e293b", color: "#fff", border: "1px solid #334155", padding: "7px 8px", borderRadius: 6, fontSize: 12 }}>
+                <option value="architect">Rol: Architect (Full)</option>
+                <option value="qa_auditor">Rol: QA Auditor</option>
+                <option value="viewer">Rol: Viewer (Read-Only)</option>
+              </select>
+              <select value={testTool} onChange={e => setTestTool(e.target.value)} style={{ flex: 1.4, minWidth: 0, background: "#1e293b", color: "#fff", border: "1px solid #334155", padding: "7px 8px", borderRadius: 6, fontSize: 12 }}>
+                <option value="get_employee_benefits">Tool: get_employee_benefits (Segura)</option>
+                <option value="restart_eks_pod">Tool: restart_eks_pod (Critica HITL)</option>
+                <option value="approve_expense">Tool: approve_expense (Critica HITL)</option>
+              </select>
+            </div>
+            <button onClick={() => checkPolicy(false)} style={{ width: "100%", background: "#0ea5e9", color: "#020617", fontWeight: 700, border: "none", borderRadius: 6, padding: "8px 12px", cursor: "pointer" }}>
+              Validar Política y Permisos RBAC
             </button>
           </div>
 
