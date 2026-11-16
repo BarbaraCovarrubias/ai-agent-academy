@@ -82,3 +82,46 @@ app.include_router(batch_router)
 app.include_router(report_router)
 app.include_router(chat_router)
 app.include_router(mcp_router)
+
+
+# === V2 ENTERPRISE PILLARS ENDPOINTS ===
+from pydantic import BaseModel
+from typing import List, Dict, Any
+from server.mcp_governance import check_mcp_policy, get_mcp_audit_logs
+from server.multi_agent_router import classify_intent
+from server.workflow_exporter import save_workflow_db, list_workflows_db, generate_langgraph_code
+
+class WorkflowPayload(BaseModel):
+    name: str = "Arquitectura Enterprise"
+    description: str = ""
+    nodes: List[Dict[str, Any]]
+    edges: List[Dict[str, Any]]
+
+class GovCheckPayload(BaseModel):
+    tool_name: str
+    user_role: str = "architect"
+    hitl_confirmed: bool = False
+
+@app.post("/api/v2/router/classify")
+async def api_classify_intent(payload: Dict[str, Any]):
+    return classify_intent(payload.get("query", ""), payload.get("has_rag", True), payload.get("has_mcp", True))
+
+@app.post("/api/v2/mcp/governance/check")
+async def api_mcp_gov_check(payload: GovCheckPayload):
+    return check_mcp_policy(payload.tool_name, payload.user_role, payload.hitl_confirmed)
+
+@app.get("/api/v2/mcp/audit-logs")
+async def api_mcp_audit_logs(limit: int = 30):
+    return {"logs": get_mcp_audit_logs(limit)}
+
+@app.post("/api/v2/workflows/save")
+async def api_save_workflow(payload: WorkflowPayload):
+    return save_workflow_db(payload.name, payload.description, payload.nodes, payload.edges)
+
+@app.get("/api/v2/workflows/list")
+async def api_list_workflows():
+    return {"workflows": list_workflows_db()}
+
+@app.post("/api/v2/workflows/export-code")
+async def api_export_workflow_code(payload: WorkflowPayload):
+    return {"code": generate_langgraph_code(payload.nodes, payload.edges)}

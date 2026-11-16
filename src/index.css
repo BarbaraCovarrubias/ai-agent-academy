@@ -8,3 +8,23 @@ html, body, #root {
   padding: 0;
   background-color: #020617;
 }
+
+
+/* Custom thin blue scrollbar for NodePaletteSidebar */
+.sidebar-thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #0284c7 #0f172a;
+}
+.sidebar-thin-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-thin-scroll::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+.sidebar-thin-scroll::-webkit-scrollbar-thumb {
+  background: #0284c7;
+  border-radius: 9999px;
+}
+.sidebar-thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: #38bdf8;
+}

@@ -1,3 +1,4 @@
+import EnterpriseStudioPanel from "./components/EnterpriseStudioPanel";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import ReactFlow, { Background, Controls, MiniMap, ReactFlowProvider, ReactFlowInstance, Connection } from 'reactflow';
 import { Database, Scale, TrendingUp, FlaskConical, Sliders, Cpu } from 'lucide-react';
@@ -17,6 +18,28 @@ import { BufferSaturationAlert } from './components/BufferSaturationAlert';
 import { checkValidConnection, validateGraphTopology } from './utils/graphValidator';
 
 function StudioCanvas() {
+  const [sandboxMode, setSandboxMode] = useState(false);
+  const [leftWidth, setLeftWidth] = useState(250);
+  const [rightWidth, setRightWidth] = useState(370);
+  const [draggingSide, setDraggingSide] = useState<"left" | "right" | null>(null);
+
+  React.useEffect(() => {
+    if (!draggingSide) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (draggingSide === "left") {
+        setLeftWidth(e.clientX < 90 ? 0 : Math.max(170, Math.min(420, e.clientX)));
+      } else if (draggingSide === "right") {
+        setRightWidth((window.innerWidth - e.clientX) < 110 ? 0 : Math.max(240, Math.min(560, window.innerWidth - e.clientX)));
+      }
+    };
+    const handleMouseUp = () => setDraggingSide(null);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [draggingSide]);
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode } = useGameStore();
   const reactFlowWrapper = useRef<HTMLDivElement | null>(null);
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
@@ -133,11 +156,41 @@ function StudioCanvas() {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        <NodePaletteSidebar />
+      <div className="flex-1 flex overflow-hidden min-h-0 select-none">
+        {/* PANEL IZQUIERDO REDIMENSIONABLE Y SCROLLEABLE */}
+        <div
+          style={{ width: leftWidth, minWidth: leftWidth, maxWidth: leftWidth }}
+          className="h-full overflow-y-auto overflow-x-hidden pb-24 flex-shrink-0 bg-slate-900/60 sidebar-thin-scroll [&>*]:!w-full [&>*]:!max-w-full [&>*]:!min-w-0 [&>*]:!h-auto [&>*]:!min-h-full"
+        >
+          <NodePaletteSidebar />
+        </div>
 
-        <div className="flex-1 h-full relative" ref={reactFlowWrapper}>
+        {/* TIRADOR ARRASTRABLE IZQUIERDO */}
+        <div
+          onMouseDown={() => setDraggingSide("left")}
+          title="Arrastrar para achicar o agrandar Bloques Disponibles (o colapsar)"
+          className={`w-2 h-full cursor-col-resize flex items-center justify-center transition-colors flex-shrink-0 z-30 ${
+            draggingSide === "left" ? "bg-sky-500" : "bg-slate-800 hover:bg-sky-500/70"
+          }`}
+        >
+          <div className="w-0.5 h-8 bg-slate-500 rounded-full" />
+        </div>
+
+        {/* CANVAS CENTRAL */}
+        <div className="flex-1 min-w-[240px] h-full relative" ref={reactFlowWrapper}>
           <GraphHealthBadge diagnostics={diagnostics} />
+
+          <div style={{ position: "absolute", top: 14, right: 14, zIndex: 25, maxWidth: "calc(100% - 210px)" }}>
+            <EnterpriseStudioPanel
+              nodes={nodes}
+              edges={edges}
+              sandboxMode={sandboxMode}
+              setSandboxMode={setSandboxMode}
+              onLoadWorkflow={(n: any, e: any) => {
+                useGameStore.setState({ nodes: n, edges: e });
+              }}
+            />
+          </div>
 
           <ReactFlow
             nodes={decoratedNodes}
@@ -163,7 +216,24 @@ function StudioCanvas() {
           </ReactFlow>
         </div>
 
-        <LiveChatDrawer />
+        {/* TIRADOR ARRASTRABLE DERECHO */}
+        <div
+          onMouseDown={() => setDraggingSide("right")}
+          title="Arrastrar para achicar o agrandar Chat en Vivo (o colapsar)"
+          className={`w-2 h-full cursor-col-resize flex items-center justify-center transition-colors flex-shrink-0 z-30 ${
+            draggingSide === "right" ? "bg-sky-500" : "bg-slate-800 hover:bg-sky-500/70"
+          }`}
+        >
+          <div className="w-0.5 h-8 bg-slate-500 rounded-full" />
+        </div>
+
+        {/* PANEL DERECHO REDIMENSIONABLE */}
+        <div
+          style={{ width: rightWidth, minWidth: rightWidth, maxWidth: rightWidth }}
+          className="h-full overflow-hidden flex-shrink-0 flex flex-col [&>*]:!w-full [&>*]:!max-w-full [&>*]:!min-w-0 [&>*]:!flex-1"
+        >
+          <LiveChatDrawer />
+        </div>
       </div>
 
       {chunkInspectorOpen && <ChunkInspectorModal initialDocId={inspectorDocId} onClose={() => setChunkInspectorOpen(false)} />}

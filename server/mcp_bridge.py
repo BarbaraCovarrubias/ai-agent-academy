@@ -67,3 +67,31 @@ async def invoke_mcp_tool(server_url: str, tool_name: str, query: str) -> Dict[s
         res = await client.post(server_url, json=call_payload, headers=headers)
         res.raise_for_status()
         return {"tool": tool_name, "result": res.json().get("result", {})}
+
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+mcp_router = APIRouter(prefix="/api/mcp", tags=["MCP"])
+
+class DiscoverRequest(BaseModel):
+    server_url: str
+
+class CallToolRequest(BaseModel):
+    server_url: str
+    tool_name: str
+    query: str = ""
+
+@mcp_router.post("/discover")
+async def api_discover_tools(req: DiscoverRequest):
+    try:
+        return await discover_mcp_tools(req.server_url)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error MCP handshake/discover: {str(e)}")
+
+@mcp_router.post("/call")
+async def api_call_tool(req: CallToolRequest):
+    try:
+        return await invoke_mcp_tool(req.server_url, req.tool_name, req.query)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error MCP tool execution: {str(e)}")
