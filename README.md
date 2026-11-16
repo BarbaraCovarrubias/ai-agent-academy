@@ -13,7 +13,7 @@
 2. **Ingeniería de Búsqueda Vectorial a Escala:** Contrastar empíricamente el rendimiento de índices aproximados **HNSW** (*Hierarchical Navigable Small World*) frente a búsquedas exactas por fuerza bruta (**Exact k-NN**) bajo volúmenes de hasta 100.000 vectores.
 3. **Observabilidad y Auto-Tuning de Infraestructura:** Monitorear en tiempo real CPU, RAM, *Buffer Hit Ratio* y lecturas de disco (`blks/s`) de PostgreSQL vía WebSockets, aplicando ajustes matemáticos óptimos de memoria (`work_mem`, `maintenance_work_mem`, `hnsw.ef_search`).
 4. **Integración Agéntica vía MCP (Model Context Protocol):** Descubrir (`tools/list`) e invocar (`tools/call`) herramientas externas mediante el estándar JSON-RPC 2.0, combinando contexto documental no estructurado con datos transaccionales en vivo.
-5. **Aseguramiento de Calidad con RAGAS:** Auditar cada turno de conversación y ejecutar baterías de prueba (*Golden Dataset*) midiendo **Faithfulness**, **Answer Relevance** y **Context Precision** con generación de informes ejecutivos.
+5. **Aseguramiento de Calidad con RAGAS:** Auditar cada turno de conversación mediante una **implementación ligera propia inspirada en las métricas de RAGAS** (*Faithfulness*, *Answer Relevance* y *Context Precision*) con generación de informes ejecutivos.
 
 ---
 
