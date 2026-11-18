@@ -109,3 +109,13 @@ Esta rama evoluciona el estudio visual hacia una arquitectura lista para entorno
 3. **Gobernanza MCP, RBAC y *Human-in-the-Loop* (`server/mcp_governance.py`):** Control de permisos por rol (`architect`, `qa_auditor`, `viewer`), bloqueo preventivo con aprobación humana explícita para herramientas críticas (`restart_eks_pod`, `approve_expense`, etc.) y registro de auditoría en PostgreSQL (`mcp_audit_logs`).
 4. **Persistencia de Topologías y Exportador a LangGraph (`server/workflow_exporter.py`):** Versionado de arquitecturas en base de datos (`saved_workflows`) y transpilación directa del grafo visual a código Python ejecutable con `StateGraph` de LangGraph.
 5. **Enterprise Studio v2 & UI Responsiva (`src/components/EnterpriseStudioPanel.jsx`):** Panel integrado con modo *Sandbox* (sin backend), paneles laterales redimensionables con tiradores arrastrables y suite de pruebas automatizadas con `pytest` (`tests/test_v2_pillars.py`).
+
+
+---
+
+## Seguridad, SharePoint MCP & Despliegue One-Click
+
+* **Guardrail Scanner & PII Redaction (`server/guardrails_scanner.py`):** Detección preventiva de *Indirect Prompt Injection* en chunks recuperados (`POST /api/v2/security/scan`) con cálculo de *Risk Score* y enmascarado automático de datos sensibles (Email, DNI, Tokens Bearer, Tarjetas).
+* **Conector Microsoft Graph / SharePoint MCP (`server/sharepoint_mcp.py`):** Consulta de bibliotecas corporativas (`POST /api/v2/mcp/sharepoint/search`) con filtrado por roles (RBAC) y *Sensitivity Labels* (`Internal`, `Confidential`, `Restricted`), listo para Entra ID / MSAL o modo *Enterprise Sandbox*.
+* **Plantillas Prearmadas & Docker Compose (`docker-compose.yml`):** Levantá todo el stack (`pgvector` + FastAPI + React) con un solo comando: `docker compose up --build`.
+* **CI Automatizado (`.github/workflows/ci.yml`):** Validación automática en cada `push` y `pull_request` mediante `pytest` y `npm run build`.
