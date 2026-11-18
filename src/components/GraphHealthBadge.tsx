@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { GraphDiagnostic } from '../utils/graphValidator';
+import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronUp, Link2, Trash2 } from 'lucide-react';
+import { GraphDiagnostic, QuickFixAction } from '../utils/graphValidator';
 
-export const GraphHealthBadge: React.FC<{ diagnostics: GraphDiagnostic[] }> = ({ diagnostics }) => {
+interface GraphHealthBadgeProps {
+  diagnostics: GraphDiagnostic[];
+  onApplyFix?: (fix: QuickFixAction) => void;
+}
+
+export const GraphHealthBadge: React.FC<GraphHealthBadgeProps> = ({ diagnostics, onApplyFix }) => {
   const [open, setOpen] = useState(false);
 
   const errors = diagnostics.filter((d) => d.severity === 'error');
@@ -39,11 +44,11 @@ export const GraphHealthBadge: React.FC<{ diagnostics: GraphDiagnostic[] }> = ({
       </button>
 
       {open && !isHealthy && (
-        <div className="mt-2 bg-slate-950/95 border border-slate-700 rounded-xl p-3 shadow-2xl space-y-2.5 max-h-72 overflow-y-auto">
+        <div className="mt-2 bg-slate-950/95 border border-slate-700 rounded-xl p-3 shadow-2xl space-y-2.5 max-h-80 overflow-y-auto">
           {diagnostics.map((d) => (
             <div
               key={d.id}
-              className={`p-2.5 rounded-lg border text-[11px] space-y-1 ${
+              className={`p-2.5 rounded-lg border text-[11px] space-y-1.5 ${
                 d.severity === 'error'
                   ? 'bg-rose-950/40 border-rose-800 text-rose-200'
                   : 'bg-amber-950/30 border-amber-800/80 text-amber-200'
@@ -53,7 +58,30 @@ export const GraphHealthBadge: React.FC<{ diagnostics: GraphDiagnostic[] }> = ({
                 <span>{d.severity === 'error' ? '❌' : '⚠️'}</span>
                 <span>{d.message}</span>
               </div>
-              <p className="text-[10px] text-slate-400 pl-5">💡 {d.fixHint}</p>
+              <p className="text-[10px] text-slate-300 pl-5">💡 {d.fixHint}</p>
+
+              {d.quickFixes && d.quickFixes.length > 0 && onApplyFix && (
+                <div className="pl-5 pt-1 flex flex-wrap gap-1.5">
+                  {d.quickFixes.map((fix, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => onApplyFix(fix)}
+                      className={`px-2 py-1 rounded-md text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer ${
+                        fix.actionType === 'connect'
+                          ? 'bg-sky-600/90 hover:bg-sky-500 text-white border border-sky-400/50'
+                          : 'bg-slate-800 hover:bg-rose-900/70 text-slate-300 hover:text-rose-200 border border-slate-600'
+                      }`}
+                    >
+                      {fix.actionType === 'connect' ? (
+                        <Link2 className="w-3 h-3" />
+                      ) : (
+                        <Trash2 className="w-3 h-3" />
+                      )}
+                      <span>{fix.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

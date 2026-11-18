@@ -1,12 +1,29 @@
 import { Node, Edge, Connection } from 'reactflow';
 
+export interface QuickFixAction {
+  label: string;
+  actionType: 'connect' | 'delete';
+  sourceId: string;
+  targetId?: string;
+}
+
 export interface GraphDiagnostic {
   id: string;
   severity: 'error' | 'warning';
   nodeId?: string;
   message: string;
   fixHint: string;
+  quickFixes?: QuickFixAction[];
 }
+
+const NODE_TYPE_LABELS: Record<string, string> = {
+  docLoader: 'Document Loader',
+  embeddingGen: 'Embedding Generator',
+  pgVectorStore: 'pgvector HNSW Store',
+  mcpClient: 'MCP Tool Client',
+  promptTemplate: 'Prompt Template',
+  llmNode: 'LLM Engine',
+};
 
 // Matriz de conexiones permitidas (origen -> destinos válidos)
 const ALLOWED_CONNECTIONS: Record<string, string[]> = {
@@ -65,21 +82,69 @@ export function validateGraphTopology(nodes: Node[], edges: Edge[]): GraphDiagno
     const incoming = edges.filter((e) => e.target === node.id);
     const outgoing = edges.filter((e) => e.source === node.id);
 
+    const allowedTargetTypes = ALLOWED_CONNECTIONS[node.type || ''] || [];
+    const candidateTargets = nodes.filter(
+      (n) =>
+        n.id !== node.id &&
+        allowedTargetTypes.includes(n.type || '') &&
+        !edges.some((e) => e.source === node.id && e.target === n.id)
+    );
+    const missingTypes = allowedTargetTypes.filter(
+      (t) => !nodes.some((n) => n.type === t)
+    );
+
+    const buildSuggestions = (): { hint: string; fixes: QuickFixAction[] } => {
+      const fixes: QuickFixAction[] = candidateTargets.map((t) => ({
+        label: `Conectar → ${t.data?.label || NODE_TYPE_LABELS[t.type || ''] || t.id}`,
+        actionType: 'connect',
+        sourceId: node.id,
+        targetId: t.id,
+      }));
+      fixes.push({
+        label: 'Eliminar bloque',
+        actionType: 'delete',
+        sourceId: node.id,
+      });
+
+      if (candidateTargets.length > 0) {
+        const names = candidateTargets.map((t) => `"${t.data?.label || t.type}"`).join(' o ');
+        return {
+          hint: `Destinos compatibles disponibles en tu grafo: ${names}.`,
+          fixes,
+        };
+      }
+      if (missingTypes.length > 0) {
+        const missingNames = missingTypes.map((t) => `"${NODE_TYPE_LABELS[t] || t}"`).join(' o ');
+        return {
+          hint: `Arrastrá un bloque ${missingNames} al canvas para poder conectar este nodo.`,
+          fixes,
+        };
+      }
+      return {
+        hint: 'Conectá su salida hacia el siguiente bloque o eliminalo para que participe en la ejecución.',
+        fixes,
+      };
+    };
+
     if (incoming.length === 0 && outgoing.length === 0) {
+      const { hint, fixes } = buildSuggestions();
       diagnostics.push({
         id: `orphan-${node.id}`,
         severity: 'warning',
         nodeId: node.id,
         message: `El nodo "${node.data?.label}" está desconectado (huérfano).`,
-        fixHint: 'Conectá su salida hacia el siguiente bloque o eliminalo para que participe en la ejecución.',
+        fixHint: hint,
+        quickFixes: fixes,
       });
     } else if (node.type !== 'llmNode' && outgoing.length === 0) {
+      const { hint, fixes } = buildSuggestions();
       diagnostics.push({
         id: `deadend-${node.id}`,
         severity: 'error',
         nodeId: node.id,
         message: `La salida de "${node.data?.label}" no llega a ningún destino.`,
-        fixHint: 'Arrastrá un cable desde su punto derecho hacia Prompt Template o LLM Engine.',
+        fixHint: hint,
+        quickFixes: fixes,
       });
     }
 

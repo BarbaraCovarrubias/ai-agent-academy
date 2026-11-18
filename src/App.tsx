@@ -15,7 +15,7 @@ import { MemoryTunerModal } from './components/MemoryTunerModal';
 import { MaintenanceLiveBanner } from './components/MaintenanceLiveBanner';
 import { SystemMetricsWidget } from './components/SystemMetricsWidget';
 import { BufferSaturationAlert } from './components/BufferSaturationAlert';
-import { checkValidConnection, validateGraphTopology } from './utils/graphValidator';
+import { checkValidConnection, validateGraphTopology, QuickFixAction } from './utils/graphValidator';
 
 function StudioCanvas() {
   const [sandboxMode, setSandboxMode] = useState(false);
@@ -178,7 +178,21 @@ function StudioCanvas() {
 
         {/* CANVAS CENTRAL */}
         <div className="flex-1 min-w-[240px] h-full relative" ref={reactFlowWrapper}>
-          <GraphHealthBadge diagnostics={diagnostics} />
+          <GraphHealthBadge
+            diagnostics={diagnostics}
+            onApplyFix={(fix: QuickFixAction) => {
+              if (fix.actionType === 'connect' && fix.targetId) {
+                onConnect({
+                  source: fix.sourceId,
+                  target: fix.targetId,
+                  sourceHandle: null,
+                  targetHandle: null,
+                });
+              } else if (fix.actionType === 'delete') {
+                onNodesChange([{ id: fix.sourceId, type: 'remove' }]);
+              }
+            }}
+          />
 
           <div style={{ position: "absolute", top: 14, right: 14, zIndex: 25, maxWidth: "calc(100% - 210px)" }}>
             <EnterpriseStudioPanel
