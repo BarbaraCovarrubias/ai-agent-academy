@@ -125,3 +125,29 @@ async def api_list_workflows():
 @app.post("/api/v2/workflows/export-code")
 async def api_export_workflow_code(payload: WorkflowPayload):
     return {"code": generate_langgraph_code(payload.nodes, payload.edges)}
+
+
+# === V2 SECURITY GUARDRAILS ENDPOINT ===
+from server.guardrails_scanner import scan_rag_payload
+
+class SecurityScanPayload(BaseModel):
+    text: str
+    redact_pii: bool = True
+    block_threshold: int = 40
+
+@app.post("/api/v2/security/scan")
+async def api_security_scan(payload: SecurityScanPayload):
+    return scan_rag_payload(payload.text, payload.redact_pii, payload.block_threshold)
+
+
+# === V2 SHAREPOINT / MICROSOFT GRAPH MCP CONNECTOR ===
+from server.sharepoint_mcp import query_sharepoint_mcp
+
+class SharePointSearchPayload(BaseModel):
+    query: str = ""
+    role: str = "viewer"
+    site_filter: str = ""
+
+@app.post("/api/v2/mcp/sharepoint/search")
+async def api_sharepoint_mcp_search(payload: SharePointSearchPayload):
+    return query_sharepoint_mcp(payload.query, payload.role, payload.site_filter)
